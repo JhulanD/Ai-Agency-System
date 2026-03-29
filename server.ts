@@ -16,12 +16,19 @@ async function startServer() {
   // Initialize Resend
   const resend = process.env.RESEND_API_KEY ? new Resend(process.env.RESEND_API_KEY) : null;
 
+  // Email validation regex
+  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
   // API Routes
   app.post("/api/capture-lead", async (req, res) => {
     const { firstName, email } = req.body;
 
     if (!firstName || !email) {
       return res.status(400).json({ error: "Name and email are required" });
+    }
+
+    if (!emailRegex.test(email)) {
+      return res.status(400).json({ error: "Invalid email format" });
     }
 
     try {
