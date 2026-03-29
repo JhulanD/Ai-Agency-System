@@ -43,12 +43,16 @@ Your AI Agency System app has been prepared for production deployment. All criti
 
 Before pushing to Vercel, verify:
 
-- [ ] **RESEND_API_KEY** - Set in Vercel project environment variables (optional, email sending will be skipped if not provided)
-- [ ] **VITE_LEMON_SQUEEZY_CHECKOUT_URL** - Set if you want checkout functionality (optional)
-- [ ] **VITE_GA_ID** - Set if you want analytics tracking (optional)
-- [ ] Run `npm run build` locally to verify production build succeeds
-- [ ] Test the entire funnel: capture lead → email verification → score reveal
-- [ ] Verify no console errors in production build
+- [ ] **Environment Variables Set in Vercel** - All three vars added to Settings → Environment Variables
+- [ ] **Run `npm run build` locally** - Verify production build succeeds with no errors
+- [ ] **Test the entire funnel locally**:
+  - [ ] Enter name and email on the home page
+  - [ ] Verify email received from Resend
+  - [ ] Click verification link in email
+  - [ ] View personalized score
+  - [ ] Click checkout button → redirects to Lemon Squeezy
+- [ ] **Verify no console errors** in production build
+- [ ] **Check Google Analytics** - Should start tracking once deployed
 
 ---
 
@@ -56,16 +60,16 @@ Before pushing to Vercel, verify:
 
 ### In Vercel Dashboard:
 1. Go to **Settings** → **Environment Variables**
-2. Add the following (only required if you want those features):
+2. Add the following variables:
 
 ```
-RESEND_API_KEY=your_resend_key_here
-VITE_LEMON_SQUEEZY_CHECKOUT_URL=https://your-checkout-link
-VITE_GA_ID=G-XXXXXXXXXX
+RESEND_API_KEY=re_DRDTj342_BF8B1APpYubutsndU2WaDR79
+VITE_LEMON_SQUEEZY_CHECKOUT_URL=https://jhulandey.lemonsqueezy.com/checkout/buy/3b6c9408-756e-4765-ac3e-f080b3f1c731?embed=1&logo=0
+VITE_GA_ID=G-52PMFDYFZW
 ```
 
 ### Local Development:
-Create a `.env` file in the project root with the same variables (copy from `.env.example`).
+Create a `.env` file in the project root with the same variables above.
 
 ---
 
@@ -88,11 +92,17 @@ curl -X POST http://localhost:3000/api/capture-lead \
 
 ## Status: ✅ READY FOR DEPLOYMENT
 
-All critical issues have been fixed. The app is now production-ready with proper:
-- Input validation
-- Error handling
-- Environment configuration
-- Analytics support (optional)
-- Email integration (optional)
+All critical issues have been fixed. The app is now production-ready with:
+- ✅ Email validation and Resend integration configured
+- ✅ Lemon Squeezy checkout link configured  
+- ✅ Google Analytics tracking configured
+- ✅ Proper input validation
+- ✅ Error handling
+- ✅ Environment configuration
 
-**Next Step**: Push these changes to your GitHub repository and deploy via Vercel!
+**Final Step**: 
+1. Add the three environment variables to your Vercel project (Settings → Environment Variables)
+2. Test locally with `npm run build && npm start`
+3. Push to GitHub and Vercel will automatically deploy!
+
+You can now deploy to production with confidence.
