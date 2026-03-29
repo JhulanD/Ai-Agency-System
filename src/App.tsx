@@ -19,6 +19,17 @@ import {
 } from 'lucide-react';
 import { UserData, FunnelStep } from './types';
 import { BENEFITS, QUIZ_QUESTIONS, INSIGHTS, FULL_PLAN } from './constants';
+import { db } from './firebase';
+import { doc, setDoc, updateDoc, serverTimestamp } from 'firebase/firestore';
+
+enum OperationType {
+  CREATE = 'create',
+  UPDATE = 'update',
+  DELETE = 'delete',
+  LIST = 'list',
+  GET = 'get',
+  WRITE = 'write',
+}
 
 export default function App() {
   const [step, setStep] = useState<FunnelStep>('landing');
@@ -32,6 +43,15 @@ export default function App() {
     score: 0
   });
   const [quizIndex, setQuizIndex] = useState(0);
+
+  const handleFirestoreError = (error: unknown, operationType: OperationType, path: string | null) => {
+    const errInfo = {
+      error: error instanceof Error ? error.message : String(error),
+      operationType,
+      path
+    };
+    console.error('Firestore Error: ', JSON.stringify(errInfo));
+  };
 
   // Helper for tracking events
   const trackEvent = (eventName: string, params?: object) => {
@@ -88,8 +108,22 @@ export default function App() {
     e.preventDefault();
     if (userData.firstName && userData.email) {
       trackEvent('Lead', { email: userData.email });
+      
+      // 1. Save to Firestore
       try {
-        // Call backend to capture lead and send email
+        const leadRef = doc(db, 'leads', userData.email.toLowerCase());
+        await setDoc(leadRef, {
+          firstName: userData.firstName,
+          email: userData.email.toLowerCase(),
+          createdAt: serverTimestamp(),
+          updatedAt: serverTimestamp()
+        });
+      } catch (error) {
+        handleFirestoreError(error, OperationType.CREATE, `leads/${userData.email.toLowerCase()}`);
+      }
+
+      // 2. Call backend to send email
+      try {
         const response = await fetch('/api/capture-lead', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -110,17 +144,35 @@ export default function App() {
     }
   };
 
-  const handleQuizAnswer = (answer: string) => {
+  const handleQuizAnswer = async (answer: string) => {
     const currentQuestion = QUIZ_QUESTIONS[quizIndex];
-    setUserData(prev => ({ ...prev, [currentQuestion.id]: answer }));
+    const updatedUserData = { ...userData, [currentQuestion.id]: answer };
+    setUserData(updatedUserData);
     
     if (quizIndex < QUIZ_QUESTIONS.length - 1) {
       setQuizIndex(quizIndex + 1);
     } else {
       // Calculate a random-ish score based on answers
       const score = Math.floor(Math.random() * 30) + 35; // 35-65 range
-      setUserData(prev => ({ ...prev, score }));
+      const finalUserData = { ...updatedUserData, score };
+      setUserData(finalUserData);
       trackEvent('QuizComplete', { score });
+
+      // Update Firestore with full results
+      try {
+        const leadRef = doc(db, 'leads', userData.email.toLowerCase());
+        await updateDoc(leadRef, {
+          score: score,
+          service: finalUserData.service,
+          revenue: finalUserData.revenue,
+          method: finalUserData.method,
+          struggle: finalUserData.struggle,
+          updatedAt: serverTimestamp()
+        });
+      } catch (error) {
+        handleFirestoreError(error, OperationType.UPDATE, `leads/${userData.email.toLowerCase()}`);
+      }
+
       handleNextStep('results');
     }
   };
@@ -135,14 +187,35 @@ export default function App() {
         // @ts-ignore
         window.LemonSqueezy.Url.Open(checkoutUrl);
       } else {
-        // Fallback to redirect if script hasn't loaded
         window.location.href = checkoutUrl;
       }
     } else {
-      // Fallback for demo/development if no key is set
       console.warn("VITE_LEMON_SQUEEZY_CHECKOUT_URL not found. Simulating success...");
       handleNextStep('delivery');
     }
+  };
+
+  const handleUpsellPayment = () => {
+    const upsellUrl = import.meta.env.VITE_LEMON_SQUEEZY_UPSELL_URL;
+    trackEvent('InitiateUpsellCheckout', { value: 49.00, currency: 'USD' });
+    
+    if (upsellUrl) {
+      // @ts-ignore
+      if (window.LemonSqueezy) {
+        // @ts-ignore
+        window.LemonSqueezy.Url.Open(upsellUrl);
+      } else {
+        window.location.href = upsellUrl;
+      }
+    } else {
+      console.warn("VITE_LEMON_SQUEEZY_UPSELL_URL not found.");
+      alert("Upsell checkout URL not configured.");
+    }
+  };
+
+  const handleDownloadPDF = () => {
+    trackEvent('DownloadPDF');
+    window.print();
   };
 
   return (
@@ -157,9 +230,9 @@ export default function App() {
             <span>AI AGENCY <span className="text-blue-500">SYSTEM</span></span>
           </div>
           <div className="hidden md:flex items-center gap-8 text-sm font-medium text-white/60">
-            <a href="#features" className="hover:text-white transition-colors">Features</a>
-            <a href="#results" className="hover:text-white transition-colors">Results</a>
-            <a href="#pricing" className="hover:text-white transition-colors">Pricing</a>
+            <a href="#features" onClick={() => setStep('landing')} className="hover:text-white transition-colors">Features</a>
+            <a href="#results" onClick={() => setStep('landing')} className="hover:text-white transition-colors">Results</a>
+            <a href="#pricing" onClick={() => setStep('landing')} className="hover:text-white transition-colors">Pricing</a>
           </div>
           <button 
             onClick={() => setStep('lead-capture')}
@@ -173,104 +246,221 @@ export default function App() {
       <main className="pt-16">
         <AnimatePresence mode="wait">
           {step === 'landing' && (
-            <motion.section 
-              key="landing"
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -20 }}
-              className="px-6 py-20 md:py-32 max-w-7xl mx-auto"
-            >
-              <div className="grid lg:grid-cols-2 gap-16 items-center">
-                <div className="space-y-8">
-                  <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-blue-500/10 border border-blue-500/20 text-blue-400 text-xs font-bold uppercase tracking-widest">
-                    <Star className="w-3 h-3 fill-current" />
-                    Trusted by 500+ Agencies
-                  </div>
-                  <h1 className="text-5xl md:text-7xl font-bold tracking-tight leading-[1.1]">
-                    Get 5–10 <span className="text-blue-500">Qualified Clients</span> Every Month Using This AI Outreach System
-                  </h1>
-                  <p className="text-xl text-white/60 max-w-xl leading-relaxed">
-                    Stop guessing your outreach. Use this proven AI system to generate leads, book calls, and close clients on autopilot.
-                  </p>
-                  
-                  <div className="space-y-4">
-                    {BENEFITS.map((benefit, i) => (
-                      <div key={i} className="flex items-center gap-3">
-                        <div className="flex-shrink-0 w-6 h-6 rounded-full bg-blue-500/20 flex items-center justify-center">
-                          <CheckCircle className="w-4 h-4 text-blue-500" />
+            <>
+              <motion.section 
+                key="landing"
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -20 }}
+                className="px-6 py-20 md:py-32 max-w-7xl mx-auto"
+              >
+                <div className="grid lg:grid-cols-2 gap-16 items-center">
+                  <div className="space-y-8">
+                    <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-blue-500/10 border border-blue-500/20 text-blue-400 text-xs font-bold uppercase tracking-widest">
+                      <Star className="w-3 h-3 fill-current" />
+                      Trusted by 500+ Agencies
+                    </div>
+                    <h1 className="text-5xl md:text-7xl font-bold tracking-tight leading-[1.1]">
+                      Get 5–10 <span className="text-blue-500">Qualified Clients</span> Every Month Using This AI Outreach System
+                    </h1>
+                    <p className="text-xl text-white/60 max-w-xl leading-relaxed">
+                      Stop guessing your outreach. Use this proven AI system to generate leads, book calls, and close clients on autopilot.
+                    </p>
+                    
+                    <div className="space-y-4">
+                      {BENEFITS.map((benefit, i) => (
+                        <div key={i} className="flex items-center gap-3">
+                          <div className="flex-shrink-0 w-6 h-6 rounded-full bg-blue-500/20 flex items-center justify-center">
+                            <CheckCircle className="w-4 h-4 text-blue-500" />
+                          </div>
+                          <span className="text-white/80 font-medium">{benefit.text}</span>
                         </div>
-                        <span className="text-white/80 font-medium">{benefit.text}</span>
+                      ))}
+                    </div>
+
+                    <div className="flex flex-col sm:flex-row gap-4 pt-4">
+                      <button 
+                        onClick={() => handleNextStep('lead-capture')}
+                        className="group relative flex items-center justify-center gap-2 bg-blue-600 hover:bg-blue-500 text-white px-8 py-4 rounded-xl font-bold text-lg transition-all shadow-lg shadow-blue-600/20 active:scale-[0.98]"
+                      >
+                        Get Free System
+                        <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
+                      </button>
+                      <div className="flex items-center gap-3 px-4 py-2">
+                        <div className="flex -space-x-2">
+                          {[1,2,3].map(i => (
+                            <img key={i} src={`https://picsum.photos/seed/user${i}/100/100`} className="w-8 h-8 rounded-full border-2 border-black" referrerPolicy="no-referrer" />
+                          ))}
+                        </div>
+                        <span className="text-sm text-white/40 font-medium">Join 500+ agency owners</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="relative">
+                    <div className="absolute -inset-4 bg-blue-500/20 blur-3xl rounded-full opacity-50" />
+                    <div className="relative bg-zinc-900/50 border border-white/10 rounded-2xl p-8 backdrop-blur-sm">
+                      <div className="space-y-6">
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-3">
+                            <div className="w-10 h-10 rounded-lg bg-blue-500/20 flex items-center justify-center">
+                              <BarChart3 className="w-6 h-6 text-blue-500" />
+                            </div>
+                            <div>
+                              <div className="text-sm font-bold">Outreach Performance</div>
+                              <div className="text-xs text-white/40">Real-time AI Analysis</div>
+                            </div>
+                          </div>
+                          <div className="text-green-400 text-sm font-bold">+245%</div>
+                        </div>
+                        
+                        <div className="h-48 flex items-end gap-2">
+                          {[40, 65, 45, 90, 75, 100, 85].map((h, i) => (
+                            <motion.div 
+                              key={i}
+                              initial={{ height: 0 }}
+                              animate={{ height: `${h}%` }}
+                              transition={{ delay: i * 0.1, duration: 1 }}
+                              className="flex-1 bg-gradient-to-t from-blue-600/20 to-blue-500 rounded-t-sm"
+                            />
+                          ))}
+                        </div>
+
+                        <div className="grid grid-cols-3 gap-4 pt-4 border-t border-white/5">
+                          <div className="text-center">
+                            <div className="text-xl font-bold">12k</div>
+                            <div className="text-[10px] text-white/40 uppercase tracking-wider font-bold">Leads</div>
+                          </div>
+                          <div className="text-center">
+                            <div className="text-xl font-bold">842</div>
+                            <div className="text-[10px] text-white/40 uppercase tracking-wider font-bold">Replies</div>
+                          </div>
+                          <div className="text-center">
+                            <div className="text-xl font-bold">48</div>
+                            <div className="text-[10px] text-white/40 uppercase tracking-wider font-bold">Calls</div>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </motion.section>
+
+              {/* Features Section */}
+              <section id="features" className="px-6 py-24 bg-zinc-900/30 border-y border-white/5">
+                <div className="max-w-7xl mx-auto space-y-16">
+                  <div className="text-center space-y-4">
+                    <h2 className="text-4xl font-bold tracking-tight">Everything You Need to Scale</h2>
+                    <p className="text-white/60 max-w-2xl mx-auto">Our AI system handles the heavy lifting so you can focus on closing deals.</p>
+                  </div>
+                  <div className="grid md:grid-cols-3 gap-8">
+                    {[
+                      { title: "AI Personalization", desc: "Generate unique, high-converting messages for every lead in seconds.", icon: <Zap className="w-6 h-6" /> },
+                      { title: "Smart Lead Scraping", desc: "Find your ideal clients across LinkedIn, Apollo, and more with precision.", icon: <Target className="w-6 h-6" /> },
+                      { title: "Automated Follow-ups", desc: "Never let a lead go cold with our multi-channel follow-up sequences.", icon: <TrendingUp className="w-6 h-6" /> }
+                    ].map((feature, i) => (
+                      <div key={i} className="p-8 bg-zinc-900 border border-white/10 rounded-2xl space-y-4">
+                        <div className="w-12 h-12 rounded-xl bg-blue-500/20 flex items-center justify-center text-blue-500">
+                          {feature.icon}
+                        </div>
+                        <h3 className="text-xl font-bold">{feature.title}</h3>
+                        <p className="text-white/60 leading-relaxed">{feature.desc}</p>
                       </div>
                     ))}
                   </div>
-
-                  <div className="flex flex-col sm:flex-row gap-4 pt-4">
-                    <button 
-                      onClick={() => handleNextStep('lead-capture')}
-                      className="group relative flex items-center justify-center gap-2 bg-blue-600 hover:bg-blue-500 text-white px-8 py-4 rounded-xl font-bold text-lg transition-all shadow-lg shadow-blue-600/20 active:scale-[0.98]"
-                    >
-                      Get Free System
-                      <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
-                    </button>
-                    <div className="flex items-center gap-3 px-4 py-2">
-                      <div className="flex -space-x-2">
-                        {[1,2,3].map(i => (
-                          <img key={i} src={`https://picsum.photos/seed/user${i}/100/100`} className="w-8 h-8 rounded-full border-2 border-black" referrerPolicy="no-referrer" />
-                        ))}
-                      </div>
-                      <span className="text-sm text-white/40 font-medium">Join 500+ agency owners</span>
-                    </div>
-                  </div>
                 </div>
+              </section>
 
-                <div className="relative">
-                  <div className="absolute -inset-4 bg-blue-500/20 blur-3xl rounded-full opacity-50" />
-                  <div className="relative bg-zinc-900/50 border border-white/10 rounded-2xl p-8 backdrop-blur-sm">
-                    <div className="space-y-6">
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-3">
-                          <div className="w-10 h-10 rounded-lg bg-blue-500/20 flex items-center justify-center">
-                            <BarChart3 className="w-6 h-6 text-blue-500" />
-                          </div>
+              {/* Results Section */}
+              <section id="results" className="px-6 py-24 max-w-7xl mx-auto">
+                <div className="text-center space-y-16">
+                  <div className="space-y-4">
+                    <h2 className="text-4xl font-bold tracking-tight">Real Results for Real Agencies</h2>
+                    <p className="text-white/60">See how our partners are transforming their client acquisition.</p>
+                  </div>
+                  <div className="grid md:grid-cols-2 gap-8">
+                    {[
+                      { name: "Alex Rivers", role: "Founder, ScaleUp Media", quote: "We went from 2 calls a week to 15+ using this exact AI outreach system. It's a game changer.", result: "+450% Meetings" },
+                      { name: "Sarah Chen", role: "CEO, CreativeFlow", quote: "The personalization is so good that leads actually thank us for reaching out. Highly recommend.", result: "12 New Clients" }
+                    ].map((testimonial, i) => (
+                      <div key={i} className="p-10 bg-zinc-900/50 border border-white/10 rounded-3xl text-left space-y-6">
+                        <div className="flex items-center gap-4">
+                          <img src={`https://picsum.photos/seed/test${i}/100/100`} className="w-12 h-12 rounded-full" referrerPolicy="no-referrer" />
                           <div>
-                            <div className="text-sm font-bold">Outreach Performance</div>
-                            <div className="text-xs text-white/40">Real-time AI Analysis</div>
+                            <div className="font-bold">{testimonial.name}</div>
+                            <div className="text-sm text-white/40">{testimonial.role}</div>
                           </div>
                         </div>
-                        <div className="text-green-400 text-sm font-bold">+245%</div>
+                        <p className="text-lg italic text-white/80">"{testimonial.quote}"</p>
+                        <div className="inline-block px-4 py-2 rounded-lg bg-green-500/10 text-green-400 font-bold text-sm">
+                          {testimonial.result}
+                        </div>
                       </div>
-                      
-                      <div className="h-48 flex items-end gap-2">
-                        {[40, 65, 45, 90, 75, 100, 85].map((h, i) => (
-                          <motion.div 
-                            key={i}
-                            initial={{ height: 0 }}
-                            animate={{ height: `${h}%` }}
-                            transition={{ delay: i * 0.1, duration: 1 }}
-                            className="flex-1 bg-gradient-to-t from-blue-600/20 to-blue-500 rounded-t-sm"
-                          />
-                        ))}
-                      </div>
+                    ))}
+                  </div>
+                </div>
+              </section>
 
-                      <div className="grid grid-cols-3 gap-4 pt-4 border-t border-white/5">
-                        <div className="text-center">
-                          <div className="text-xl font-bold">12k</div>
-                          <div className="text-[10px] text-white/40 uppercase tracking-wider font-bold">Leads</div>
-                        </div>
-                        <div className="text-center">
-                          <div className="text-xl font-bold">842</div>
-                          <div className="text-[10px] text-white/40 uppercase tracking-wider font-bold">Replies</div>
-                        </div>
-                        <div className="text-center">
-                          <div className="text-xl font-bold">48</div>
-                          <div className="text-[10px] text-white/40 uppercase tracking-wider font-bold">Calls</div>
-                        </div>
+              {/* Pricing Section */}
+              <section id="pricing" className="px-6 py-24 bg-blue-600/5 border-y border-blue-500/10">
+                <div className="max-w-4xl mx-auto text-center space-y-12">
+                  <div className="space-y-4">
+                    <h2 className="text-4xl font-bold tracking-tight">Simple, Transparent Pricing</h2>
+                    <p className="text-white/60">Choose the plan that fits your agency's stage.</p>
+                  </div>
+                  <div className="grid md:grid-cols-2 gap-8">
+                    <div className="p-8 bg-zinc-900 border border-white/10 rounded-3xl space-y-6 flex flex-col text-left">
+                      <div className="space-y-2">
+                        <h3 className="text-xl font-bold text-blue-500">AI Outreach Blueprint</h3>
+                        <div className="text-4xl font-black">$9</div>
+                        <p className="text-sm text-white/40">One-time payment</p>
                       </div>
+                      <p className="text-sm text-white/60 leading-relaxed">
+                        A personalized, data-driven roadmap to transform your cold outreach using AI. Based on your specific business goals, we generate a step-by-step execution plan to help you land more meetings and close more deals.
+                      </p>
+                      <ul className="space-y-3 text-sm text-white/60 flex-grow">
+                        <li className="flex items-center gap-2"><CheckCircle className="w-4 h-4 text-blue-500" /> Personalized 30-Day Execution Calendar</li>
+                        <li className="flex items-center gap-2"><CheckCircle className="w-4 h-4 text-blue-500" /> AI-Optimized Script Templates</li>
+                        <li className="flex items-center gap-2"><CheckCircle className="w-4 h-4 text-blue-500" /> Target Audience Identification Guide</li>
+                        <li className="flex items-center gap-2"><CheckCircle className="w-4 h-4 text-blue-500" /> Tool Stack Recommendations</li>
+                        <li className="flex items-center gap-2"><CheckCircle className="w-4 h-4 text-blue-500" /> Downloadable PDF Roadmap</li>
+                      </ul>
+                      <button 
+                        onClick={() => handleNextStep('lead-capture')}
+                        className="w-full py-3 bg-white text-black rounded-xl font-bold hover:bg-white/90 transition-all mt-6"
+                      >
+                        Get My Roadmap
+                      </button>
+                    </div>
+                    <div className="p-8 bg-blue-600 border border-blue-400 rounded-3xl space-y-6 shadow-xl shadow-blue-600/20 flex flex-col text-left relative overflow-hidden">
+                      <div className="absolute top-4 right-4 bg-white/20 px-2 py-1 rounded text-[10px] font-bold uppercase tracking-widest">Most Popular</div>
+                      <div className="space-y-2">
+                        <h3 className="text-xl font-bold">Outreach Accelerator</h3>
+                        <div className="text-4xl font-black">$49</div>
+                        <p className="text-sm text-blue-100/60">One-time payment</p>
+                      </div>
+                      <p className="text-sm text-blue-50 leading-relaxed">
+                        Skip the learning curve and get everything you need to launch your AI outreach system today. This premium upgrade includes advanced automation workflows, high-converting sequence templates, and a deep dive into AI personalization at scale.
+                      </p>
+                      <ul className="space-y-3 text-sm text-blue-50 flex-grow">
+                        <li className="flex items-center gap-2"><CheckCircle className="w-4 h-4" /> Everything in the $9 Roadmap</li>
+                        <li className="flex items-center gap-2"><CheckCircle className="w-4 h-4" /> Advanced AI Automation Workflows (Zapier/Make)</li>
+                        <li className="flex items-center gap-2"><CheckCircle className="w-4 h-4" /> 10+ High-Converting Sequence Templates</li>
+                        <li className="flex items-center gap-2"><CheckCircle className="w-4 h-4" /> Lead Scraping & Enrichment Masterclass</li>
+                        <li className="flex items-center gap-2"><CheckCircle className="w-4 h-4" /> Priority Support for Implementation</li>
+                        <li className="flex items-center gap-2"><CheckCircle className="w-4 h-4" /> Lifetime Access to Future Updates</li>
+                      </ul>
+                      <button 
+                        onClick={() => handleNextStep('lead-capture')}
+                        className="w-full py-3 bg-white text-blue-600 rounded-xl font-bold hover:bg-blue-50 transition-all mt-6"
+                      >
+                        Upgrade to Accelerator
+                      </button>
                     </div>
                   </div>
                 </div>
-              </div>
-            </motion.section>
+              </section>
+            </>
           )}
 
           {step === 'lead-capture' && (
@@ -431,8 +621,8 @@ export default function App() {
                       <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-blue-500/10 border border-blue-500/20 text-blue-400 text-xs font-bold uppercase tracking-widest">
                         Limited Time Offer
                       </div>
-                      <h3 className="text-3xl font-bold tracking-tight">Unlock Your Full Plan</h3>
-                      <p className="text-white/60">Get the exact AI prompts, scripts, and roadmap to hit 5-10 new clients per month.</p>
+                      <h3 className="text-3xl font-bold tracking-tight">AI Outreach Blueprint: Your 30-Day Scale Plan</h3>
+                      <p className="text-white/60">A personalized, data-driven roadmap to transform your cold outreach using AI. Get your step-by-step execution plan to land more meetings and close more deals.</p>
                     </div>
 
                     <div className="flex items-center justify-center gap-4 py-4">
@@ -447,7 +637,7 @@ export default function App() {
                       onClick={handlePayment}
                       className="w-full group flex items-center justify-center gap-3 bg-blue-600 hover:bg-blue-500 text-white py-5 rounded-2xl font-bold text-xl transition-all shadow-lg shadow-blue-600/20 active:scale-[0.98]"
                     >
-                      Unlock Full Plan
+                      Get My Roadmap
                       <ArrowRight className="w-6 h-6 group-hover:translate-x-1 transition-transform" />
                     </button>
 
@@ -480,7 +670,10 @@ export default function App() {
                   <h2 className="text-4xl font-bold tracking-tight">Your AI Client Acquisition Plan</h2>
                   <p className="text-white/60">Welcome, {userData.firstName}. Your roadmap is ready below.</p>
                 </div>
-                <button className="flex items-center justify-center gap-2 bg-white text-black px-8 py-4 rounded-xl font-bold hover:bg-white/90 transition-all">
+                <button 
+                  onClick={handleDownloadPDF}
+                  className="flex items-center justify-center gap-2 bg-white text-black px-8 py-4 rounded-xl font-bold hover:bg-white/90 transition-all"
+                >
                   <Download className="w-5 h-5" />
                   Download PDF
                 </button>
@@ -530,33 +723,48 @@ export default function App() {
                   {/* Upsell Card */}
                   <div className="bg-gradient-to-br from-blue-600 to-blue-800 rounded-3xl p-8 space-y-6 shadow-2xl shadow-blue-600/20">
                     <div className="space-y-2">
-                      <div className="text-white/80 text-xs font-bold uppercase tracking-widest">Exclusive Upsell</div>
-                      <h3 className="text-2xl font-bold leading-tight">Done-For-You AI System Setup</h3>
-                      <p className="text-blue-100/80 text-sm leading-relaxed">We'll set up your entire AI outreach engine, scrape 1,000 leads, and launch your first campaign.</p>
+                      <div className="text-white/80 text-xs font-bold uppercase tracking-widest">Premium Upgrade</div>
+                      <h3 className="text-2xl font-bold leading-tight">Outreach Accelerator: Done-With-You Implementation</h3>
+                      <p className="text-blue-100/80 text-sm leading-relaxed">Skip the learning curve and get everything you need to launch your AI outreach system today. This premium upgrade includes advanced automation workflows, high-converting sequence templates, and a deep dive into AI personalization at scale.</p>
                     </div>
                     
                     <div className="space-y-3">
                       <div className="flex items-center gap-2 text-sm font-medium">
                         <CheckCircle className="w-4 h-4" />
-                        Full CRM Integration
+                        Everything in the $9 Roadmap
                       </div>
                       <div className="flex items-center gap-2 text-sm font-medium">
                         <CheckCircle className="w-4 h-4" />
-                        1,000 Verified Leads
+                        Advanced AI Automation Workflows (Zapier/Make)
                       </div>
                       <div className="flex items-center gap-2 text-sm font-medium">
                         <CheckCircle className="w-4 h-4" />
-                        Campaign Management
+                        10+ High-Converting Sequence Templates
+                      </div>
+                      <div className="flex items-center gap-2 text-sm font-medium">
+                        <CheckCircle className="w-4 h-4" />
+                        Lead Scraping & Enrichment Masterclass
+                      </div>
+                      <div className="flex items-center gap-2 text-sm font-medium">
+                        <CheckCircle className="w-4 h-4" />
+                        Priority Support for Implementation
+                      </div>
+                      <div className="flex items-center gap-2 text-sm font-medium">
+                        <CheckCircle className="w-4 h-4" />
+                        Lifetime Access to Future Updates
                       </div>
                     </div>
 
                     <div className="pt-4 space-y-4">
                       <div className="flex items-end gap-2">
-                        <div className="text-3xl font-black">$299</div>
-                        <div className="text-blue-200/60 text-sm mb-1">/ month</div>
+                        <div className="text-3xl font-black">$49</div>
+                        <div className="text-blue-200/60 text-sm mb-1">One-time</div>
                       </div>
-                      <button className="w-full bg-white text-blue-600 py-4 rounded-xl font-bold text-lg hover:bg-blue-50 transition-all active:scale-[0.98]">
-                        Apply Now
+                      <button 
+                        onClick={handleUpsellPayment}
+                        className="w-full bg-white text-blue-600 py-4 rounded-xl font-bold text-lg hover:bg-blue-50 transition-all active:scale-[0.98]"
+                      >
+                        Upgrade to Accelerator
                       </button>
                     </div>
                   </div>

@@ -1,0 +1,57 @@
+{
+  "entities": {
+    "Lead": {
+      "title": "Lead",
+      "description": "A potential client who has entered their details and potentially completed the quiz.",
+      "type": "object",
+      "properties": {
+        "firstName": {
+          "type": "string",
+          "description": "The user's first name."
+        },
+        "email": {
+          "type": "string",
+          "format": "email",
+          "description": "The user's work email address."
+        },
+        "score": {
+          "type": "integer",
+          "description": "The user's quiz score (0-100)."
+        },
+        "service": {
+          "type": "string",
+          "description": "The type of service the user provides."
+        },
+        "revenue": {
+          "type": "string",
+          "description": "The user's current monthly revenue."
+        },
+        "method": {
+          "type": "string",
+          "description": "The user's current outreach method."
+        },
+        "struggle": {
+          "type": "string",
+          "description": "The user's biggest struggle with outreach."
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "When the lead was first captured."
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "When the lead was last updated (e.g., after quiz completion)."
+        }
+      },
+      "required": ["firstName", "email", "createdAt"]
+    }
+  },
+  "firestore": {
+    "leads/{leadId}": {
+      "schema": "Lead",
+      "description": "Collection of captured leads."
+    }
+  }
+}

@@ -24,3 +24,27 @@
     @apply bg-blue-500/30 text-white;
   }
 }
+
+@media print {
+  nav, .no-print, button {
+    display: none !important;
+  }
+  
+  body {
+    background: white !important;
+    color: black !important;
+  }
+
+  .bg-zinc-900, .bg-zinc-900\/50, .bg-blue-600\/5 {
+    background: #f4f4f5 !important;
+    border-color: #e4e4e7 !important;
+  }
+
+  .text-white\/60, .text-white\/40 {
+    color: #52525b !important;
+  }
+
+  .text-blue-500, .text-blue-400 {
+    color: #2563eb !important;
+  }
+}
