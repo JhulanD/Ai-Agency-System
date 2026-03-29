@@ -64,41 +64,15 @@ export default function App() {
 
   // Check for payment success on mount
   useEffect(() => {
-    const params = new URLSearchParams(window.location.search);
-    if (params.get('payment_success') === 'true') {
-      setStep('delivery');
-      trackEvent('Purchase', { value: 9.00, currency: 'USD' });
-      // Clean up URL
-      window.history.replaceState({}, '', window.location.pathname);
-    }
-
-    // Listen for Lemon Squeezy overlay events
-    const handleMessage = (e: MessageEvent) => {
-      if (e.data && typeof e.data === 'string') {
-        try {
-          const data = JSON.parse(e.data);
-          if (data.event === 'Checkout.Success') {
-            setStep('delivery');
-            trackEvent('Purchase', { value: 9.00, currency: 'USD' });
-          }
-        } catch (err) {
-          // Not a Lemon Squeezy event
-        }
-      }
-    };
-
-    window.addEventListener('message', handleMessage);
-
-    return () => {
-      window.removeEventListener('message', handleMessage);
-    };
-  }, []);
-
-  // Scroll to top on step change
-  useEffect(() => {
+    // Scroll to top on step change
     window.scrollTo(0, 0);
     trackEvent('PageView', { page_path: step });
   }, [step]);
+
+  const resetToLanding = () => {
+    setStep('landing');
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
 
   const handleNextStep = (nextStep: FunnelStep) => {
     setStep(nextStep);
@@ -178,39 +152,8 @@ export default function App() {
   };
 
   const handlePayment = () => {
-    const checkoutUrl = import.meta.env.VITE_LEMON_SQUEEZY_CHECKOUT_URL;
-    trackEvent('InitiateCheckout', { value: 9.00, currency: 'USD' });
-    
-    if (checkoutUrl) {
-      // @ts-ignore
-      if (window.LemonSqueezy) {
-        // @ts-ignore
-        window.LemonSqueezy.Url.Open(checkoutUrl);
-      } else {
-        window.location.href = checkoutUrl;
-      }
-    } else {
-      console.warn("VITE_LEMON_SQUEEZY_CHECKOUT_URL not found. Simulating success...");
-      handleNextStep('delivery');
-    }
-  };
-
-  const handleUpsellPayment = () => {
-    const upsellUrl = import.meta.env.VITE_LEMON_SQUEEZY_UPSELL_URL;
-    trackEvent('InitiateUpsellCheckout', { value: 49.00, currency: 'USD' });
-    
-    if (upsellUrl) {
-      // @ts-ignore
-      if (window.LemonSqueezy) {
-        // @ts-ignore
-        window.LemonSqueezy.Url.Open(upsellUrl);
-      } else {
-        window.location.href = upsellUrl;
-      }
-    } else {
-      console.warn("VITE_LEMON_SQUEEZY_UPSELL_URL not found.");
-      alert("Upsell checkout URL not configured.");
-    }
+    trackEvent('AccessFreeRoadmap');
+    handleNextStep('delivery');
   };
 
   const handleDownloadPDF = () => {
@@ -223,8 +166,11 @@ export default function App() {
       {/* Navigation / Header */}
       <header className="fixed top-0 left-0 right-0 z-50 border-b border-white/5 bg-black/50 backdrop-blur-xl">
         <div className="max-w-7xl mx-auto px-6 h-16 flex items-center justify-between">
-          <div className="flex items-center gap-2 font-bold text-xl tracking-tighter">
-            <div className="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center">
+          <div 
+            onClick={resetToLanding}
+            className="flex items-center gap-2 font-bold text-xl tracking-tighter cursor-pointer group"
+          >
+            <div className="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center group-hover:scale-110 transition-transform">
               <Zap className="w-5 h-5 fill-white" />
             </div>
             <span>AI AGENCY <span className="text-blue-500">SYSTEM</span></span>
@@ -232,7 +178,6 @@ export default function App() {
           <div className="hidden md:flex items-center gap-8 text-sm font-medium text-white/60">
             <a href="#features" onClick={() => setStep('landing')} className="hover:text-white transition-colors">Features</a>
             <a href="#results" onClick={() => setStep('landing')} className="hover:text-white transition-colors">Results</a>
-            <a href="#pricing" onClick={() => setStep('landing')} className="hover:text-white transition-colors">Pricing</a>
           </div>
           <button 
             onClick={() => setStep('lead-capture')}
@@ -256,12 +201,17 @@ export default function App() {
               >
                 <div className="grid lg:grid-cols-2 gap-16 items-center">
                   <div className="space-y-8">
-                    <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-blue-500/10 border border-blue-500/20 text-blue-400 text-xs font-bold uppercase tracking-widest">
-                      <Star className="w-3 h-3 fill-current" />
-                      Trusted by 500+ Agencies
+                    <div className="inline-flex flex-col sm:flex-row sm:items-center gap-3">
+                      <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-blue-500/10 border border-blue-500/20 text-blue-400 text-xs font-bold uppercase tracking-widest">
+                        <Star className="w-3 h-3 fill-current" />
+                        Trusted by 500+ Agencies
+                      </div>
+                      <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-green-500/10 border border-green-500/20 text-green-400 text-xs font-bold uppercase tracking-widest">
+                        Limited Time Free Blueprint
+                      </div>
                     </div>
-                    <h1 className="text-5xl md:text-7xl font-bold tracking-tight leading-[1.1]">
-                      Get 5–10 <span className="text-blue-500">Qualified Clients</span> Every Month Using This AI Outreach System
+                    <h1 className="text-5xl md:text-7xl font-bold tracking-tight leading-[75px]">
+                      Get 5–10 <span className="text-blue-500">Qualified Clients</span> Every Month With This Limited Time Free AI Blueprint
                     </h1>
                     <p className="text-xl text-white/60 max-w-xl leading-relaxed">
                       Stop guessing your outreach. Use this proven AI system to generate leads, book calls, and close clients on autopilot.
@@ -283,7 +233,7 @@ export default function App() {
                         onClick={() => handleNextStep('lead-capture')}
                         className="group relative flex items-center justify-center gap-2 bg-blue-600 hover:bg-blue-500 text-white px-8 py-4 rounded-xl font-bold text-lg transition-all shadow-lg shadow-blue-600/20 active:scale-[0.98]"
                       >
-                        Get Free System
+                        Get Free Blueprint
                         <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
                       </button>
                       <div className="flex items-center gap-3 px-4 py-2">
@@ -397,66 +347,6 @@ export default function App() {
                         </div>
                       </div>
                     ))}
-                  </div>
-                </div>
-              </section>
-
-              {/* Pricing Section */}
-              <section id="pricing" className="px-6 py-24 bg-blue-600/5 border-y border-blue-500/10">
-                <div className="max-w-4xl mx-auto text-center space-y-12">
-                  <div className="space-y-4">
-                    <h2 className="text-4xl font-bold tracking-tight">Simple, Transparent Pricing</h2>
-                    <p className="text-white/60">Choose the plan that fits your agency's stage.</p>
-                  </div>
-                  <div className="grid md:grid-cols-2 gap-8">
-                    <div className="p-8 bg-zinc-900 border border-white/10 rounded-3xl space-y-6 flex flex-col text-left">
-                      <div className="space-y-2">
-                        <h3 className="text-xl font-bold text-blue-500">AI Outreach Blueprint</h3>
-                        <div className="text-4xl font-black">$9</div>
-                        <p className="text-sm text-white/40">One-time payment</p>
-                      </div>
-                      <p className="text-sm text-white/60 leading-relaxed">
-                        A personalized, data-driven roadmap to transform your cold outreach using AI. Based on your specific business goals, we generate a step-by-step execution plan to help you land more meetings and close more deals.
-                      </p>
-                      <ul className="space-y-3 text-sm text-white/60 flex-grow">
-                        <li className="flex items-center gap-2"><CheckCircle className="w-4 h-4 text-blue-500" /> Personalized 30-Day Execution Calendar</li>
-                        <li className="flex items-center gap-2"><CheckCircle className="w-4 h-4 text-blue-500" /> AI-Optimized Script Templates</li>
-                        <li className="flex items-center gap-2"><CheckCircle className="w-4 h-4 text-blue-500" /> Target Audience Identification Guide</li>
-                        <li className="flex items-center gap-2"><CheckCircle className="w-4 h-4 text-blue-500" /> Tool Stack Recommendations</li>
-                        <li className="flex items-center gap-2"><CheckCircle className="w-4 h-4 text-blue-500" /> Downloadable PDF Roadmap</li>
-                      </ul>
-                      <button 
-                        onClick={() => handleNextStep('lead-capture')}
-                        className="w-full py-3 bg-white text-black rounded-xl font-bold hover:bg-white/90 transition-all mt-6"
-                      >
-                        Get My Roadmap
-                      </button>
-                    </div>
-                    <div className="p-8 bg-blue-600 border border-blue-400 rounded-3xl space-y-6 shadow-xl shadow-blue-600/20 flex flex-col text-left relative overflow-hidden">
-                      <div className="absolute top-4 right-4 bg-white/20 px-2 py-1 rounded text-[10px] font-bold uppercase tracking-widest">Most Popular</div>
-                      <div className="space-y-2">
-                        <h3 className="text-xl font-bold">Outreach Accelerator</h3>
-                        <div className="text-4xl font-black">$49</div>
-                        <p className="text-sm text-blue-100/60">One-time payment</p>
-                      </div>
-                      <p className="text-sm text-blue-50 leading-relaxed">
-                        Skip the learning curve and get everything you need to launch your AI outreach system today. This premium upgrade includes advanced automation workflows, high-converting sequence templates, and a deep dive into AI personalization at scale.
-                      </p>
-                      <ul className="space-y-3 text-sm text-blue-50 flex-grow">
-                        <li className="flex items-center gap-2"><CheckCircle className="w-4 h-4" /> Everything in the $9 Roadmap</li>
-                        <li className="flex items-center gap-2"><CheckCircle className="w-4 h-4" /> Advanced AI Automation Workflows (Zapier/Make)</li>
-                        <li className="flex items-center gap-2"><CheckCircle className="w-4 h-4" /> 10+ High-Converting Sequence Templates</li>
-                        <li className="flex items-center gap-2"><CheckCircle className="w-4 h-4" /> Lead Scraping & Enrichment Masterclass</li>
-                        <li className="flex items-center gap-2"><CheckCircle className="w-4 h-4" /> Priority Support for Implementation</li>
-                        <li className="flex items-center gap-2"><CheckCircle className="w-4 h-4" /> Lifetime Access to Future Updates</li>
-                      </ul>
-                      <button 
-                        onClick={() => handleNextStep('lead-capture')}
-                        className="w-full py-3 bg-white text-blue-600 rounded-xl font-bold hover:bg-blue-50 transition-all mt-6"
-                      >
-                        Upgrade to Accelerator
-                      </button>
-                    </div>
                   </div>
                 </div>
               </section>
@@ -599,52 +489,54 @@ export default function App() {
                     <p className="text-sm text-white/80 leading-relaxed">{insight}</p>
                   </div>
                 ))}
-              </div>
-
-              <div className="relative mt-20">
-                {/* Blurred Content */}
-                <div className="space-y-12 blur-xl pointer-events-none select-none opacity-30">
+              </div>              <div className="relative mt-20">
+                {/* Unblurred Content */}
+                <div className="space-y-12">
                   <div className="space-y-4">
                     <h3 className="text-2xl font-bold">Your Custom AI Outreach Plan</h3>
-                    <div className="h-40 bg-zinc-800 rounded-xl w-full" />
+                    <div className="p-8 bg-zinc-900/50 border border-white/10 rounded-2xl space-y-4">
+                      <div className="flex items-center gap-3 text-blue-500">
+                        <CheckCircle className="w-5 h-5" />
+                        <span className="font-bold">Personalized Roadmap Generated</span>
+                      </div>
+                      <p className="text-white/60">Based on your score of {userData.score}%, we've identified the exact gaps in your outreach and created a 30-day plan to fix them.</p>
+                    </div>
                   </div>
                   <div className="space-y-4">
                     <h3 className="text-2xl font-bold">Exact Scripts & Prompts</h3>
-                    <div className="h-64 bg-zinc-800 rounded-xl w-full" />
+                    <div className="p-8 bg-zinc-900/50 border border-white/10 rounded-2xl space-y-4">
+                      <div className="flex items-center gap-3 text-blue-500">
+                        <CheckCircle className="w-5 h-5" />
+                        <span className="font-bold">AI Templates Ready</span>
+                      </div>
+                      <p className="text-white/60">Your custom script templates are ready for review. These are optimized for your specific service and target audience.</p>
+                    </div>
                   </div>
                 </div>
 
-                {/* Overlay Paywall */}
-                <div className="absolute inset-0 flex items-center justify-center">
-                  <div className="w-full max-w-lg bg-zinc-900 border border-blue-500/30 rounded-3xl p-10 shadow-2xl shadow-blue-500/20 text-center space-y-8 backdrop-blur-md">
+                {/* Call to Action Overlay (Not a paywall anymore) */}
+                <div className="mt-12 flex items-center justify-center">
+                  <div className="w-full max-w-lg bg-zinc-900 border border-blue-500/30 rounded-3xl p-10 shadow-2xl shadow-blue-600/20 text-center space-y-8">
                     <div className="space-y-4">
                       <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-blue-500/10 border border-blue-500/20 text-blue-400 text-xs font-bold uppercase tracking-widest">
-                        Limited Time Offer
+                        Free Access
                       </div>
-                      <h3 className="text-3xl font-bold tracking-tight">AI Outreach Blueprint: Your 30-Day Scale Plan</h3>
-                      <p className="text-white/60">A personalized, data-driven roadmap to transform your cold outreach using AI. Get your step-by-step execution plan to land more meetings and close more deals.</p>
-                    </div>
-
-                    <div className="flex items-center justify-center gap-4 py-4">
-                      <div className="text-4xl font-black">$9</div>
-                      <div className="text-left">
-                        <div className="text-white/40 line-through text-sm">$97.00</div>
-                        <div className="text-blue-400 text-xs font-bold">One-time payment</div>
-                      </div>
+                      <h3 className="text-3xl font-bold tracking-tight">Access Your Full Roadmap</h3>
+                      <p className="text-white/60">Get your personalized 30-day execution plan to land more meetings and close more deals using AI. Completely free for a limited time.</p>
                     </div>
 
                     <button 
                       onClick={handlePayment}
                       className="w-full group flex items-center justify-center gap-3 bg-blue-600 hover:bg-blue-500 text-white py-5 rounded-2xl font-bold text-xl transition-all shadow-lg shadow-blue-600/20 active:scale-[0.98]"
                     >
-                      Get My Roadmap
+                      Access My Roadmap
                       <ArrowRight className="w-6 h-6 group-hover:translate-x-1 transition-transform" />
                     </button>
 
                     <div className="flex items-center justify-center gap-6 pt-4 border-t border-white/5">
                       <div className="flex items-center gap-2 text-xs text-white/40">
                         <ShieldCheck className="w-4 h-4" />
-                        Secure Checkout
+                        Instant Access
                       </div>
                       <div className="flex items-center gap-2 text-xs text-white/40">
                         <Star className="w-4 h-4 fill-yellow-500 text-yellow-500" />
@@ -664,7 +556,7 @@ export default function App() {
               animate={{ opacity: 1, y: 0 }}
               className="px-6 py-20 max-w-5xl mx-auto space-y-16"
             >
-              <div className="flex flex-col md:flex-row md:items-center justify-between gap-8">
+              <div className="flex flex-col md:flex-row md:items-center justify-between gap-8 no-print">
                 <div className="space-y-2">
                   <div className="text-blue-500 font-bold uppercase tracking-widest text-xs">Success!</div>
                   <h2 className="text-4xl font-bold tracking-tight">Your AI Client Acquisition Plan</h2>
@@ -679,9 +571,9 @@ export default function App() {
                 </button>
               </div>
 
-              <div className="grid lg:grid-cols-3 gap-8">
-                <div className="lg:col-span-2 space-y-8">
-                  <div className="bg-zinc-900/50 border border-white/10 rounded-3xl p-8 space-y-8">
+              <div id="printable-roadmap" className="grid lg:grid-cols-3 gap-8">
+                <div className="lg:col-span-3 space-y-8">
+                  <div className="bg-zinc-900/50 border border-white/10 rounded-3xl p-8 space-y-8 roadmap-card">
                     <div className="space-y-6">
                       <h3 className="text-2xl font-bold flex items-center gap-3">
                         <Mail className="w-6 h-6 text-blue-500" />
@@ -689,7 +581,7 @@ export default function App() {
                       </h3>
                       <div className="space-y-4">
                         {FULL_PLAN.scripts.map((script, i) => (
-                          <div key={i} className="p-6 bg-black/40 border border-white/5 rounded-2xl space-y-3">
+                          <div key={i} className="p-6 bg-black/40 border border-white/5 rounded-2xl space-y-3 script-item">
                             <div className="text-sm font-bold text-blue-400 uppercase tracking-wider">{script.title}</div>
                             <p className="text-white/80 italic leading-relaxed">"{script.content}"</p>
                           </div>
@@ -707,78 +599,34 @@ export default function App() {
                       </div>
                     </div>
 
-                    <div className="space-y-6 pt-8 border-t border-white/5">
+                    <div className="space-y-12 pt-8 border-t border-white/5">
                       <h3 className="text-2xl font-bold flex items-center gap-3">
                         <TrendingUp className="w-6 h-6 text-blue-500" />
-                        Weekly Action Plan
+                        4-Week Execution Roadmap
                       </h3>
-                      <div className="p-6 bg-black/40 border border-white/5 rounded-2xl">
-                        <p className="text-white/80 leading-relaxed">{FULL_PLAN.actionPlan}</p>
+                      <div className="space-y-8">
+                        {FULL_PLAN.roadmap.map((week, i) => (
+                          <div key={i} className="space-y-4">
+                            <div className="flex flex-col gap-1">
+                              <h4 className="text-xl font-bold text-white">{week.week}</h4>
+                              <p className="text-sm text-blue-400 font-medium">{week.focus}</p>
+                            </div>
+                            <div className="grid sm:grid-cols-1 gap-3">
+                              {week.days.map((day, j) => (
+                                <div key={j} className="p-4 bg-black/40 border border-white/5 rounded-xl flex gap-4 items-start">
+                                  <div className="flex-shrink-0 w-12 text-xs font-bold text-white/40 uppercase pt-1">{day.day}</div>
+                                  <p className="text-sm text-white/80 leading-relaxed">{day.task}</p>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        ))}
                       </div>
                     </div>
-                  </div>
-                </div>
-
-                <div className="space-y-8">
-                  {/* Upsell Card */}
-                  <div className="bg-gradient-to-br from-blue-600 to-blue-800 rounded-3xl p-8 space-y-6 shadow-2xl shadow-blue-600/20">
-                    <div className="space-y-2">
-                      <div className="text-white/80 text-xs font-bold uppercase tracking-widest">Premium Upgrade</div>
-                      <h3 className="text-2xl font-bold leading-tight">Outreach Accelerator: Done-With-You Implementation</h3>
-                      <p className="text-blue-100/80 text-sm leading-relaxed">Skip the learning curve and get everything you need to launch your AI outreach system today. This premium upgrade includes advanced automation workflows, high-converting sequence templates, and a deep dive into AI personalization at scale.</p>
-                    </div>
-                    
-                    <div className="space-y-3">
-                      <div className="flex items-center gap-2 text-sm font-medium">
-                        <CheckCircle className="w-4 h-4" />
-                        Everything in the $9 Roadmap
-                      </div>
-                      <div className="flex items-center gap-2 text-sm font-medium">
-                        <CheckCircle className="w-4 h-4" />
-                        Advanced AI Automation Workflows (Zapier/Make)
-                      </div>
-                      <div className="flex items-center gap-2 text-sm font-medium">
-                        <CheckCircle className="w-4 h-4" />
-                        10+ High-Converting Sequence Templates
-                      </div>
-                      <div className="flex items-center gap-2 text-sm font-medium">
-                        <CheckCircle className="w-4 h-4" />
-                        Lead Scraping & Enrichment Masterclass
-                      </div>
-                      <div className="flex items-center gap-2 text-sm font-medium">
-                        <CheckCircle className="w-4 h-4" />
-                        Priority Support for Implementation
-                      </div>
-                      <div className="flex items-center gap-2 text-sm font-medium">
-                        <CheckCircle className="w-4 h-4" />
-                        Lifetime Access to Future Updates
-                      </div>
-                    </div>
-
-                    <div className="pt-4 space-y-4">
-                      <div className="flex items-end gap-2">
-                        <div className="text-3xl font-black">$49</div>
-                        <div className="text-blue-200/60 text-sm mb-1">One-time</div>
-                      </div>
-                      <button 
-                        onClick={handleUpsellPayment}
-                        className="w-full bg-white text-blue-600 py-4 rounded-xl font-bold text-lg hover:bg-blue-50 transition-all active:scale-[0.98]"
-                      >
-                        Upgrade to Accelerator
-                      </button>
-                    </div>
-                  </div>
-
-                  <div className="bg-zinc-900/50 border border-white/10 rounded-3xl p-8 space-y-4">
-                    <h4 className="font-bold">Need Help?</h4>
-                    <p className="text-sm text-white/40">Our team is available 24/7 to help you implement your AI system.</p>
-                    <button className="text-sm font-bold text-blue-500 hover:text-blue-400 transition-colors flex items-center gap-2">
-                      Contact Support
-                      <ArrowRight className="w-4 h-4" />
-                    </button>
                   </div>
                 </div>
               </div>
+
             </motion.section>
           )}
         </AnimatePresence>
@@ -787,14 +635,30 @@ export default function App() {
       {/* Footer */}
       <footer className="border-t border-white/5 py-12 px-6 mt-20">
         <div className="max-w-7xl mx-auto flex flex-col md:flex-row justify-between items-center gap-8">
-          <div className="flex items-center gap-2 font-bold text-lg tracking-tighter opacity-50">
+          <div 
+            onClick={resetToLanding}
+            className="flex items-center gap-2 font-bold text-lg tracking-tighter opacity-50 cursor-pointer hover:opacity-100 transition-opacity"
+          >
             <Zap className="w-5 h-5 fill-white" />
             <span>AI AGENCY SYSTEM</span>
           </div>
           <div className="flex gap-8 text-sm text-white/40">
-            <a href="#" className="hover:text-white transition-colors">Privacy Policy</a>
-            <a href="#" className="hover:text-white transition-colors">Terms of Service</a>
-            <a href="#" className="hover:text-white transition-colors">Contact</a>
+            <div className="relative group cursor-help">
+              <span className="hover:text-white transition-colors">Privacy Policy</span>
+              <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-4 w-64 p-4 bg-zinc-900 border border-white/10 rounded-xl opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all shadow-2xl z-50">
+                <h5 className="font-bold text-white mb-2">Privacy Policy</h5>
+                <p className="text-xs leading-relaxed">We value your privacy. Your lead data is used solely for generating your custom roadmap and providing relevant AI agency updates. We never sell your data to third parties.</p>
+                <div className="absolute bottom-[-6px] left-1/2 -translate-x-1/2 w-3 h-3 bg-zinc-900 border-r border-b border-white/10 rotate-45"></div>
+              </div>
+            </div>
+            <div className="relative group cursor-help">
+              <span className="hover:text-white transition-colors">Terms of Service</span>
+              <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-4 w-64 p-4 bg-zinc-900 border border-white/10 rounded-xl opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all shadow-2xl z-50">
+                <h5 className="font-bold text-white mb-2">Terms of Service</h5>
+                <p className="text-xs leading-relaxed">By using this system, you agree to use the provided AI prompts and roadmaps ethically. Results vary based on implementation and market conditions.</p>
+                <div className="absolute bottom-[-6px] left-1/2 -translate-x-1/2 w-3 h-3 bg-zinc-900 border-r border-b border-white/10 rotate-45"></div>
+              </div>
+            </div>
           </div>
           <div className="text-sm text-white/20">
             © 2026 AI Agency System. All rights reserved.
